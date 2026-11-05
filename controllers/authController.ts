@@ -261,7 +261,7 @@ const restrictTo = (...roles: string[]) => {
   return (req: Request, res: Response, next: NextFunction) => {
     try {
       // roles ['admin', 'lead-guide']. role='user'
-      if (req.user?.role && !roles.includes(req.user.role)) {
+      if (!req.user || !roles.includes(req.user.role)) {
         throw new Error('You do not have permission to perform this action');
       }
       next(); // Only go to next function if the check passes
