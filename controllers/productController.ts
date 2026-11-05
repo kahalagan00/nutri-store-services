@@ -1,5 +1,6 @@
 import { RequestHandler } from 'express';
 import Product from '../models/productModel';
+import Cart from '../models/cartModel';
 
 const getAllProducts: RequestHandler = async (req, res) => {
   try {
@@ -80,6 +81,29 @@ const createProduct: RequestHandler = async (req, res, next) => {
 const deleteProduct: RequestHandler = async (req, res, next) => {
   try {
     const doc = await Product.findByIdAndDelete(req.params.id);
+
+    // Remove the deleted product from every cart that contains it
+    if (doc) {
+      const carts = await Cart.find({ 'cartItems.productId': doc._id });
+      for (const cart of carts) {
+        const removedItems = cart.cartItems.filter((item) =>
+          item.productId.equals(doc._id)
+        );
+        cart.cartItems = cart.cartItems.filter(
+          (item) => !item.productId.equals(doc._id)
+        );
+        for (const item of removedItems) {
+          cart.totalPrice -= item.quantity * item.price;
+        }
+
+        // Set to 0 just in case decimals occur from rounding and cart is empty
+        if (cart.cartItems.length === 0) {
+          cart.totalPrice = 0;
+        }
+
+        await cart.save();
+      }
+    }
 
     console.log('Warning (deleteProduct) got Requested 🗑️');
 
