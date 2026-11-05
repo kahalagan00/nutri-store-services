@@ -1,6 +1,7 @@
 import { RequestHandler } from 'express';
 import Stripe from 'stripe';
 import dotenv from 'dotenv';
+import Product from '../models/productModel';
 
 const FRONTEND_URL = 'https://jhuvnutrition.fit'; // for production
 // const FRONTEND_URL = 'http://localhost:5173'; // for development
@@ -24,9 +25,22 @@ const createCheckoutSession: RequestHandler = async (req, res) => {
   try {
     console.log('Create checkout session hit 📋');
     // console.log(req.body);
+
+    // Never trust the client's price; use the price stored in the database
+    const products = await Promise.all(
+      req.body.items.map((item: CartItem) => Product.findById(item.productId))
+    );
+    if (products.some((product) => !product)) {
+      res.status(400).json({
+        status: 'error',
+        message: 'One or more products in the cart no longer exist',
+      });
+      return;
+    }
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
-      line_items: req.body.items.map((item: CartItem) => ({
+      line_items: req.body.items.map((item: CartItem, i: number) => ({
         price_data: {
           currency: 'usd',
           product_data: {
@@ -34,7 +48,7 @@ const createCheckoutSession: RequestHandler = async (req, res) => {
             images: [`${FRONTEND_URL}/images/products/${item.image}`], // Stripe supports only a single image per product
             description: item.purpose, // Additional description
           },
-          unit_amount: Math.round(item.price * 100), // Amount in cents * 100
+          unit_amount: Math.round(products[i]!.price * 100), // Amount in cents * 100
         },
         quantity: item.quantity,
       })),
