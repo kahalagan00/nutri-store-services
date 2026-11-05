@@ -173,22 +173,48 @@ const clearCart: RequestHandler = async (req, res) => {
 
     console.log('Warning (clearCart) got Requested 🛒❌');
 
+    // Atomically decrement stock; the filter only matches if enough stock remains,
+    // so concurrent checkouts can't oversell
+    const decremented = [];
     for (const item of doc.cartItems) {
-      const productDoc = await Product.findByIdAndUpdate(item.productId);
+      const productDoc = await Product.findOneAndUpdate(
+        { _id: item.productId, stockQuantity: { $gte: item.quantity } },
+        { $inc: { stockQuantity: -item.quantity } },
+        { new: true }
+      );
 
       if (!productDoc) {
-        throw new Error('Product not found');
+        // Roll back the items already decremented in this checkout
+        await Promise.all(
+          decremented.map(({ item }) =>
+            Product.updateOne(
+              { _id: item.productId },
+              { $inc: { stockQuantity: item.quantity } }
+            )
+          )
+        );
+
+        const exists = await Product.exists({ _id: item.productId });
+        res.status(exists ? 409 : 404).json({
+          status: 'error',
+          message: exists
+            ? `Not enough stock for ${item.name}`
+            : 'Product not found',
+        });
+        return;
       }
 
-      const updatedStockQuantity = productDoc.stockQuantity - item.quantity;
-      productDoc.stockQuantity = updatedStockQuantity;
-
-      if (updatedStockQuantity <= 0) {
-        productDoc.availability = false;
-      }
-
-      await productDoc.save();
+      decremented.push({ item, productDoc });
     }
+
+    // Mark sold-out products as unavailable only once the whole cart succeeded
+    await Promise.all(
+      decremented
+        .filter(({ productDoc }) => productDoc.stockQuantity <= 0)
+        .map(({ productDoc }) =>
+          Product.updateOne({ _id: productDoc._id }, { availability: false })
+        )
+    );
 
     doc.cartItems = [];
     doc.totalPrice = 0;

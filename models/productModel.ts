@@ -39,6 +39,7 @@ const productSchema = new mongoose.Schema<IProduct>({
   grams: {
     type: Number,
     required: [true, 'The product must have a weight (grams)'],
+    min: [0, 'Grams cannot be negative'],
   },
   matterType: {
     type: String,
@@ -48,6 +49,7 @@ const productSchema = new mongoose.Schema<IProduct>({
   price: {
     type: Number,
     required: [true, 'The product must have a price'],
+    min: [0, 'Price cannot be negative'],
   },
   availability: {
     type: Boolean,
@@ -57,6 +59,7 @@ const productSchema = new mongoose.Schema<IProduct>({
   stockQuantity: {
     type: Number,
     required: [true, 'The number of products in stock must be specified'],
+    min: [0, 'Stock quantity cannot be negative'],
   },
   warnings: [String],
   ingredients: [String],

@@ -3,7 +3,7 @@ import Stripe from 'stripe';
 import dotenv from 'dotenv';
 import Product from '../models/productModel';
 
-const FRONTEND_URL = 'https://jhuvnutrition.fit'; // for production
+const FRONTEND_URL = 'https://jhuvnutrition.com'; // for production
 // const FRONTEND_URL = 'http://localhost:5173'; // for development
 
 type CartItem = {
@@ -34,6 +34,18 @@ const createCheckoutSession: RequestHandler = async (req, res) => {
       res.status(400).json({
         status: 'error',
         message: 'One or more products in the cart no longer exist',
+      });
+      return;
+    }
+
+    // Reject before payment if there isn't enough stock
+    const outOfStock = products.find(
+      (product, i) => product.stockQuantity < req.body.items[i].quantity
+    );
+    if (outOfStock) {
+      res.status(400).json({
+        status: 'error',
+        message: `Not enough stock for ${outOfStock.name}`,
       });
       return;
     }
