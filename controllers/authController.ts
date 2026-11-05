@@ -69,8 +69,24 @@ const createSendToken = (
 
 const signup: RequestHandler = async (req, res, next) => {
   try {
+    // Allowlist user-settable fields; never trust role, active, password-reset fields, etc. from the client
+    const {
+      name,
+      email,
+      password,
+      passwordConfirm,
+      image,
+      dateOfBirth,
+      paymentInfo,
+    } = req.body;
     const newUser = await User.create({
-      ...req.body,
+      name,
+      email,
+      password,
+      passwordConfirm,
+      image,
+      dateOfBirth,
+      paymentInfo,
       height: {
         heightMetric: req.body.height,
         heightImperial: req.body.height * INCHES_IN_METER,
