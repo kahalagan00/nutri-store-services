@@ -1,0 +1,199 @@
+[
+  {
+    "purpose": "Increase muscle mass",
+    "name": "Whey Protein",
+    "image": "whey_protein_image_url.jpg",
+    "grams": 30,
+    "matterType": "solid",
+    "price": 29.99,
+    "stockQuantity": 1,
+    "warnings": [
+      "Contains dairy",
+      "Not suitable for lactose-intolerant individuals"
+    ],
+    "ingredients": [
+      "Whey protein concentrate",
+      "Cocoa powder",
+      "Natural flavors",
+      "Sucralose"
+    ],
+    "nutritionalFacts": {
+      "calories": 120,
+      "carbohydrates": 3,
+      "protein": 24
+    }
+  },
+  {
+    "purpose": "Joint support",
+    "name": "Glucosamine Chondroitin",
+    "image": "glucosamine_chondroitin_image_url.jpg",
+    "grams": 1.5,
+    "matterType": "solid",
+    "price": 19.99,
+    "stockQuantity": 90,
+    "warnings": ["Consult a doctor if pregnant or nursing"],
+    "ingredients": [
+      "Glucosamine sulfate",
+      "Chondroitin sulfate",
+      "Gelatin capsule"
+    ],
+    "nutritionalFacts": {
+      "calories": 0,
+      "carbohydrates": 0,
+      "protein": 0
+    }
+  },
+  {
+    "purpose": "Immune support",
+    "name": "Vitamin C",
+    "image": "vitamin_c_image_url.jpg",
+    "grams": 0.5,
+    "matterType": "solid",
+    "price": 12.99,
+    "stockQuantity": 100,
+    "warnings": ["High doses may cause stomach upset"],
+    "ingredients": [
+      "Vitamin C (ascorbic acid)",
+      "Cellulose",
+      "Magnesium stearate"
+    ],
+    "nutritionalFacts": {
+      "calories": 0,
+      "carbohydrates": 0,
+      "protein": 0
+    }
+  },
+  {
+    "purpose": "Energy boost",
+    "name": "Caffeine",
+    "image": "caffeine_image_url.jpg",
+    "grams": 0.2,
+    "matterType": "solid",
+    "price": 9.99,
+    "stockQuantity": 100,
+    "warnings": ["Avoid if sensitive to caffeine"],
+    "ingredients": ["Caffeine anhydrous"],
+    "nutritionalFacts": {
+      "calories": 0,
+      "carbohydrates": 0,
+      "protein": 0
+    }
+  },
+  {
+    "purpose": "Improved focus",
+    "name": "Omega-3 Fish Oil",
+    "image": "omega_3_image_url.jpg",
+    "grams": 1,
+    "matterType": "liquid",
+    "price": 24.99,
+    "stockQuantity": 90,
+    "warnings": ["Consult a doctor if taking blood thinners"],
+    "ingredients": ["Fish oil", "Gelatin", "Glycerin", "Water"],
+    "nutritionalFacts": {
+      "calories": 10,
+      "carbohydrates": 0,
+      "protein": 0
+    }
+  },
+  {
+    "purpose": "Sleep aid",
+    "name": "Melatonin",
+    "image": "melatonin_image_url.jpg",
+    "grams": 0.005,
+    "matterType": "solid",
+    "price": 8.99,
+    "stockQuantity": 60,
+    "warnings": ["May cause drowsiness"],
+    "ingredients": ["Melatonin", "Microcrystalline cellulose", "Stearic acid"],
+    "nutritionalFacts": {
+      "calories": 0,
+      "carbohydrates": 0,
+      "protein": 0
+    }
+  },
+  {
+    "purpose": "Muscle recovery",
+    "name": "BCAA",
+    "image": "bcaa_image_url.jpg",
+    "grams": 5,
+    "matterType": "solid",
+    "price": 22.99,
+    "stockQuantity": 30,
+    "warnings": ["Not recommended for people with kidney issues"],
+    "ingredients": [
+      "Leucine",
+      "Isoleucine",
+      "Valine",
+      "Natural flavors",
+      "Sucralose"
+    ],
+    "nutritionalFacts": {
+      "calories": 20,
+      "carbohydrates": 0,
+      "protein": 5
+    }
+  },
+  {
+    "purpose": "Bone health",
+    "name": "Calcium + Vitamin D",
+    "image": "calcium_vitamin_d_image_url.jpg",
+    "grams": 1.2,
+    "matterType": "solid",
+    "price": 15.99,
+    "stockQuantity": 100,
+    "warnings": ["Do not exceed recommended dose"],
+    "ingredients": [
+      "Calcium carbonate",
+      "Vitamin D3",
+      "Cellulose",
+      "Stearic acid"
+    ],
+    "nutritionalFacts": {
+      "calories": 0,
+      "carbohydrates": 0,
+      "protein": 0
+    }
+  },
+  {
+    "purpose": "Digestive health",
+    "name": "Probiotic",
+    "image": "probiotic_image_url.jpg",
+    "grams": 0.5,
+    "matterType": "solid",
+    "price": 17.99,
+    "stockQuantity": 60,
+    "warnings": ["Consult a doctor if immunocompromised"],
+    "ingredients": [
+      "Lactobacillus acidophilus",
+      "Bifidobacterium lactis",
+      "Cellulose"
+    ],
+    "nutritionalFacts": {
+      "calories": 0,
+      "carbohydrates": 0,
+      "protein": 0
+    }
+  },
+  {
+    "purpose": "General wellness",
+    "name": "Multivitamin",
+    "image": "multivitamin_image_url.jpg",
+    "grams": 1,
+    "matterType": "solid",
+    "price": 14.99,
+    "stockQuantity": 90,
+    "warnings": ["Keep out of reach of children"],
+    "ingredients": [
+      "Vitamin A",
+      "Vitamin C",
+      "Vitamin D",
+      "Vitamin E",
+      "B vitamins"
+    ],
+    "nutritionalFacts": {
+      "calories": 0,
+      "carbohydrates": 0,
+      "protein": 0
+    }
+  }
+]

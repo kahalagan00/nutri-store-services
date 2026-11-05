@@ -1,0 +1,41 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Node modules for both frontend and backend
+node_modules
+
+# Prevent dangerous environment variable information from leaking
+*.env
+
+*.prettierrc
+
+# Build directories (frontend and backend)
+dist/
+.cache
+public/js/bundle.js  # Ignore only the bundle.js in public/js/
+
+# System files
+.DS_Store
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Operating System files
+Thumbs.db
+
+
+# Netlify specific
+netlify.toml
