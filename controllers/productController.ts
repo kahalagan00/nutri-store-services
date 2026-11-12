@@ -41,13 +41,23 @@ const getProduct: RequestHandler = async (req, res) => {
 
     console.log('Yay (getProduct) we got Requested 🥳');
 
+    if (!doc) {
+      res.status(404).json({
+        status: 'fail',
+        message: 'No product found with that ID',
+      });
+      return;
+    }
+
     res.status(200).json({
       status: 'success',
       data: doc,
     });
     return;
   } catch (err: unknown) {
-    res.status(500).json({
+    // Malformed id is a client error, anything else is a server error
+    const isBadId = err instanceof mongoose.Error.CastError;
+    res.status(isBadId ? 400 : 500).json({
       status: 'error',
       message:
         err instanceof Error
@@ -87,20 +97,18 @@ const deleteProduct: RequestHandler = async (req, res, next) => {
     // so a failure here leaves the product in place and the request can be retried
     const carts = await Cart.find({ 'cartItems.productId': id });
     for (const cart of carts) {
-      const removedItems = cart.cartItems.filter((item) =>
-        item.productId.equals(id)
-      );
+      // Items without a productId are kept, not crashed on
       cart.cartItems = cart.cartItems.filter(
-        (item) => !item.productId.equals(id)
+        (item) => !item.productId?.equals(id)
       );
-      for (const item of removedItems) {
-        cart.totalPrice -= item.quantity * item.price;
-      }
 
-      // Set to 0 just in case decimals occur from rounding and cart is empty
-      if (cart.cartItems.length === 0) {
-        cart.totalPrice = 0;
-      }
+      // Recompute from the remaining items (rounded to cents) instead of
+      // subtracting, so float rounding errors do not accumulate
+      const total = cart.cartItems.reduce(
+        (sum, item) => sum + (item.quantity ?? 0) * (item.price ?? 0),
+        0
+      );
+      cart.totalPrice = Math.round(total * 100) / 100;
 
       await cart.save();
     }
