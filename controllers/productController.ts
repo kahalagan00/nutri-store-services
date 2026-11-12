@@ -6,14 +6,23 @@ import Cart from '../models/cartModel';
 const getAllProducts: RequestHandler = async (req, res) => {
   try {
     // console.log(req.cookies);
-    const doc = await Product.find();
-    if (!doc) {
-      res.status(404).json({
-        status: 'fail',
-        message: 'No documents found!',
-      });
-      return;
-    }
+    // Optional pagination: ?page=2&limit=20
+    // Defaults to page 1 with 100 products, invalid values fall back to defaults
+    const page = Math.min(
+      Math.max(parseInt(String(req.query.page), 10) || 1, 1),
+      10000
+    );
+    const limit = Math.min(
+      Math.max(parseInt(String(req.query.limit), 10) || 100, 1),
+      100
+    );
+
+    // Sorted so pages are stable, lean because the docs are only serialized
+    const doc = await Product.find()
+      .sort('_id')
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean();
 
     console.log('Yay (getAllProducts) we got Requested 🥳');
 
@@ -70,6 +79,15 @@ const getProduct: RequestHandler = async (req, res) => {
 
 const createProduct: RequestHandler = async (req, res, next) => {
   try {
+    // An array body would make Product.create() insert several products
+    if (Array.isArray(req.body)) {
+      res.status(400).json({
+        status: 'fail',
+        message: 'Request body must be a single product object',
+      });
+      return;
+    }
+
     const doc = await Product.create(req.body);
 
     console.log('Yay (createProduct) we got Requested 🥳');
@@ -79,6 +97,18 @@ const createProduct: RequestHandler = async (req, res, next) => {
       data: doc,
     });
   } catch (err) {
+    // Duplicate key (unique name), hide the raw MongoDB error message
+    if (
+      err instanceof mongoose.mongo.MongoServerError &&
+      err.code === 11000
+    ) {
+      res.status(409).json({
+        status: 'fail',
+        message: 'A product with that name already exists',
+      });
+      return;
+    }
+
     res.status(400).json({
       status: 'error',
       message:
