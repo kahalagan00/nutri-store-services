@@ -6,6 +6,8 @@ import ExpressMongoSanitize from 'express-mongo-sanitize';
 import cookieParser from 'cookie-parser';
 import compression from 'compression';
 import cors from 'cors';
+import helmet from 'helmet';
+import hpp from 'hpp';
 const xss = require('xss-clean');
 
 // Routers
@@ -19,12 +21,21 @@ const app = express();
 
 // <------------------------------------------------------------------------------------------>
 // Middlewares -->
-const allowedOrigins = [
+// Vercel sits in front of the app as a single proxy; trust it so "req.ip"
+// (used by the rate limiter) is the real client IP instead of the proxy's
+app.set('trust proxy', 1);
 
-  // TODO: Add an .env variable changing here for dev, test, and prod
+// Set security HTTP headers
+app.use(helmet());
+
+const allowedOrigins = [
   'https://jhuvnutrition.com', // For production
-  'http://localhost:5173', // For development
 ];
+
+// Only allow the local frontend outside of production
+if (process.env.NODE_ENV !== 'production') {
+  allowedOrigins.push('http://localhost:5173'); // For development
+}
 
 app.use(
   cors({
@@ -86,6 +97,9 @@ app.use(ExpressMongoSanitize());
 
 // Data sanitization against XSS
 app.use(xss());
+
+// Prevent HTTP parameter pollution (duplicate query params, last one wins)
+app.use(hpp());
 
 // Compresses the overall code or just the app.js
 app.use(compression());

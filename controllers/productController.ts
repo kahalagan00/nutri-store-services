@@ -33,12 +33,11 @@ const getAllProducts: RequestHandler = async (req, res) => {
     });
     return;
   } catch (err: unknown) {
+    // Log the details server-side, never send raw error messages to the client
+    console.error(err);
     res.status(500).json({
       status: 'error',
-      message:
-        err instanceof Error
-          ? err.message
-          : 'An error occured when fetching all products',
+      message: 'An error occured when fetching all products',
     });
     return;
   }
@@ -66,12 +65,12 @@ const getProduct: RequestHandler = async (req, res) => {
   } catch (err: unknown) {
     // Malformed id is a client error, anything else is a server error
     const isBadId = err instanceof mongoose.Error.CastError;
+    if (!isBadId) console.error(err);
     res.status(isBadId ? 400 : 500).json({
       status: 'error',
-      message:
-        err instanceof Error
-          ? err.message
-          : 'An unknown error occurred when fetching product',
+      message: isBadId
+        ? 'Invalid product ID'
+        : 'An unknown error occurred when fetching product',
     });
     return;
   }
@@ -136,13 +135,26 @@ const createProduct: RequestHandler = async (req, res, next) => {
     }
 
     // Validation problems are client errors, anything else is a server error
-    const isInvalid = err instanceof mongoose.Error.ValidationError;
-    res.status(isInvalid ? 400 : 500).json({
+    if (err instanceof mongoose.Error.ValidationError) {
+      // Send only the schema's own messages, not Mongoose's cast error text
+      const message = Object.values(err.errors)
+        .map((e) =>
+          e instanceof mongoose.Error.CastError
+            ? `Invalid value for ${e.path}`
+            : e.message
+        )
+        .join('. ');
+      res.status(400).json({
+        status: 'error',
+        message,
+      });
+      return;
+    }
+
+    console.error(err);
+    res.status(500).json({
       status: 'error',
-      message:
-        err instanceof Error
-          ? err.message
-          : 'Please fill out all required fields for the product',
+      message: 'An error occurred when creating the product',
     });
   }
 };
@@ -188,12 +200,12 @@ const deleteProduct: RequestHandler = async (req, res, next) => {
   } catch (err) {
     // Malformed id is a client error, anything else is a server error
     const isBadId = err instanceof mongoose.Error.CastError;
+    if (!isBadId) console.error(err);
     res.status(isBadId ? 400 : 500).json({
       status: 'error',
-      message:
-        err instanceof Error
-          ? err.message
-          : 'An error occurred when deleting the product',
+      message: isBadId
+        ? 'Invalid product ID'
+        : 'An error occurred when deleting the product',
     });
   }
 };

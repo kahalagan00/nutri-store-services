@@ -104,23 +104,46 @@ const updateCart: RequestHandler = async (req, res, next) => {
       throw new Error('Cart not found');
     }
 
-    // Modify the document
-    doc.totalPrice += req.body.price * req.body.quantity;
+    if (!mongoose.Types.ObjectId.isValid(req.body.productId)) {
+      throw new Error('Invalid product ID');
+    }
 
-    const isProductInCart = doc.cartItems.some(
-      (item) => item.productId.toString() === req.body.productId
+    // Never trust the client for product details (price, name, etc.);
+    // read them from the stored product, which must still exist
+    const productDoc = await Product.findById(req.body.productId);
+
+    if (!productDoc) {
+      res.status(404).json({
+        status: 'error',
+        message: 'Product not found',
+      });
+      return;
+    }
+
+    // Modify the document
+    doc.totalPrice += productDoc.price * req.body.quantity;
+
+    const isProductInCart = doc.cartItems.some((item) =>
+      item.productId.equals(productDoc._id)
     );
 
     // If the item is already in the cart then just increase the quantity
     if (isProductInCart) {
       doc.cartItems = doc.cartItems.map((item) =>
-        item.name === req.body.name
+        item.productId.equals(productDoc._id)
           ? { ...item, quantity: item.quantity + req.body.quantity }
           : item
       );
     } else {
       // console.log('It just pushes...');
-      doc.cartItems.push(req.body);
+      doc.cartItems.push({
+        productId: productDoc._id,
+        name: productDoc.name,
+        price: productDoc.price,
+        quantity: req.body.quantity,
+        image: productDoc.image,
+        purpose: productDoc.purpose,
+      });
     }
 
     // Save the updated document
