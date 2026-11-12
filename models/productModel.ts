@@ -26,6 +26,7 @@ const productSchema = new mongoose.Schema<IProduct>({
     type: String,
     required: [true, 'A product must have a name'],
     unique: true,
+    trim: true,
   },
   purpose: {
     type: String,
@@ -60,6 +61,10 @@ const productSchema = new mongoose.Schema<IProduct>({
     type: Number,
     required: [true, 'The number of products in stock must be specified'],
     min: [0, 'Stock quantity cannot be negative'],
+    validate: {
+      validator: Number.isInteger,
+      message: 'Stock quantity must be a whole number',
+    },
   },
   warnings: [String],
   ingredients: [String],
@@ -76,6 +81,14 @@ const productSchema = new mongoose.Schema<IProduct>({
       },
     },
     required: [true, 'The product must contain its specific nutritional facts'],
+    validate: {
+      // An empty object passes "required", so check for at least one fact
+      validator: (facts: IProduct['nutritionalFacts']) =>
+        facts.calories != null ||
+        facts.carbohydrates != null ||
+        facts.protein != null,
+      message: 'The product must contain at least one nutritional fact',
+    },
   },
   slug: String,
 });
@@ -86,6 +99,11 @@ productSchema.pre('save', function (next) {
   // Converts the product name into lowercase and separates them
   // by dashes
   this.slug = slugify(this.name, { lower: true });
+
+  // A product with no stock cannot be available
+  if (this.stockQuantity === 0) {
+    this.availability = false;
+  }
   next();
 });
 

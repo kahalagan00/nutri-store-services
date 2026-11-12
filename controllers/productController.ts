@@ -88,7 +88,33 @@ const createProduct: RequestHandler = async (req, res, next) => {
       return;
     }
 
-    const doc = await Product.create(req.body);
+    // Allowlist product fields; never trust _id, __v, slug, etc. from the client
+    const {
+      name,
+      purpose,
+      image,
+      grams,
+      matterType,
+      price,
+      availability,
+      stockQuantity,
+      warnings,
+      ingredients,
+      nutritionalFacts,
+    } = req.body;
+    const doc = await Product.create({
+      name,
+      purpose,
+      image,
+      grams,
+      matterType,
+      price,
+      availability,
+      stockQuantity,
+      warnings,
+      ingredients,
+      nutritionalFacts,
+    });
 
     console.log('Yay (createProduct) we got Requested 🥳');
 
@@ -109,7 +135,9 @@ const createProduct: RequestHandler = async (req, res, next) => {
       return;
     }
 
-    res.status(400).json({
+    // Validation problems are client errors, anything else is a server error
+    const isInvalid = err instanceof mongoose.Error.ValidationError;
+    res.status(isInvalid ? 400 : 500).json({
       status: 'error',
       message:
         err instanceof Error
