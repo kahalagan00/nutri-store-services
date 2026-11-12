@@ -65,6 +65,24 @@ app.use(((req: Request, res: Response, next: NextFunction): void => {
   next();
 }) as express.RequestHandler); // Explicitly type as RequestHandler
 
+// CSRF protection: the auth cookie is "SameSite=None", so browsers attach it to
+// requests made from ANY site. Reject state-changing requests from unknown origins.
+// Non-browser clients send no Origin header and carry no cookies, so they pass
+app.use(((req: Request, res: Response, next: NextFunction): void => {
+  const origin = req.headers.origin;
+  const isReadOnly = ['GET', 'HEAD', 'OPTIONS'].includes(req.method);
+
+  if (!isReadOnly && origin && !allowedOrigins.includes(origin)) {
+    res.status(403).json({
+      status: 'error',
+      message: 'Requests from this origin are not allowed',
+    });
+    return;
+  }
+
+  next();
+}) as express.RequestHandler);
+
 // Development logging
 if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev')); // Morgan logs HTTP request details

@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import slugify from 'slugify';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
+import validator from 'validator';
 
 // Define the interface for the User
 interface IUser extends mongoose.Document {
@@ -39,17 +40,21 @@ const userSchema = new mongoose.Schema<IUser>({
     type: String,
     required: [true, 'A user must have a full name specified'],
     unique: true,
+    trim: true,
   },
   email: {
     type: String,
     required: [true, 'A user needs a specified email address'],
+    trim: true,
+    validate: [validator.isEmail, 'Please provide a valid email address'],
     // Login looks users up by email, so two accounts must never share one
     unique: true,
   },
   password: {
     type: String,
     required: [true, 'Please provide a password for the user'],
-    minLength: 8,
+    // Custom message, the default one echoes the submitted password back
+    minLength: [8, 'A password must have at least 8 characters'],
     select: false,
     unique: true,
   },

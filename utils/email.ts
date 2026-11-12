@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer';
 
-const RESET_TOKEN_TIME_LIMIT = 15;
+// Must match the token lifetime set in createPasswordResetToken (userModel)
+const RESET_TOKEN_TIME_LIMIT = 10;
 
 export default class Email {
   to: string;
