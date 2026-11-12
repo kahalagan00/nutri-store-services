@@ -43,6 +43,8 @@ const userSchema = new mongoose.Schema<IUser>({
   email: {
     type: String,
     required: [true, 'A user needs a specified email address'],
+    // Login looks users up by email, so two accounts must never share one
+    unique: true,
   },
   password: {
     type: String,
@@ -74,7 +76,7 @@ const userSchema = new mongoose.Schema<IUser>({
   },
   dateOfBirth: {
     type: Date,
-    default: Date.now(),
+    default: Date.now, // Passed as a function so it runs per user, not once at startup
     // Important because some products are recommended to be taken by people in a certain age range
     required: [true, 'The user must specify their date of birth'],
   },
@@ -111,8 +113,9 @@ const userSchema = new mongoose.Schema<IUser>({
   //   ref: 'Cart',
   // },
   passwordChangedAt: Date,
-  passwordResetToken: String,
-  passwordResetExpires: Date,
+  // Never sent to clients; queries can still filter on them
+  passwordResetToken: { type: String, select: false },
+  passwordResetExpires: { type: Date, select: false },
   active: {
     type: Boolean,
     default: true,

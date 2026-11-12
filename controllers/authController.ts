@@ -1,6 +1,7 @@
 const { promisify } = require('util');
 const crypto = require('crypto');
 import jwt from 'jsonwebtoken';
+import mongoose from 'mongoose';
 import User from '../models/userModel';
 import { NextFunction, Request, RequestHandler, Response } from 'express';
 import Email from '../utils/email';
@@ -100,6 +101,18 @@ const signup: RequestHandler = async (req, res, next) => {
 
     createSendToken(newUser, 201, req, res);
   } catch (err) {
+    // Duplicate key (unique email or name), hide the raw MongoDB error message
+    if (
+      err instanceof mongoose.mongo.MongoServerError &&
+      err.code === 11000
+    ) {
+      res.status(409).json({
+        status: 'error',
+        message: 'An account with that email or name already exists',
+      });
+      return;
+    }
+
     res.status(400).json({
       status: 'error',
       message:
