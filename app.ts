@@ -20,8 +20,10 @@ const app = express();
 // <------------------------------------------------------------------------------------------>
 // Middlewares -->
 const allowedOrigins = [
+
+  // TODO: Add an .env variable changing here for dev, test, and prod
   'https://jhuvnutrition.com', // For production
-  // 'http://localhost:5173', // For development
+  'http://localhost:5173', // For development
 ];
 
 app.use(

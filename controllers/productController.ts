@@ -1,4 +1,5 @@
 import { RequestHandler } from 'express';
+import mongoose from 'mongoose';
 import Product from '../models/productModel';
 import Cart from '../models/cartModel';
 
@@ -80,42 +81,53 @@ const createProduct: RequestHandler = async (req, res, next) => {
 
 const deleteProduct: RequestHandler = async (req, res, next) => {
   try {
-    const doc = await Product.findByIdAndDelete(req.params.id);
+    const id = req.params.id;
 
-    // Remove the deleted product from every cart that contains it
-    if (doc) {
-      const carts = await Cart.find({ 'cartItems.productId': doc._id });
-      for (const cart of carts) {
-        const removedItems = cart.cartItems.filter((item) =>
-          item.productId.equals(doc._id)
-        );
-        cart.cartItems = cart.cartItems.filter(
-          (item) => !item.productId.equals(doc._id)
-        );
-        for (const item of removedItems) {
-          cart.totalPrice -= item.quantity * item.price;
-        }
-
-        // Set to 0 just in case decimals occur from rounding and cart is empty
-        if (cart.cartItems.length === 0) {
-          cart.totalPrice = 0;
-        }
-
-        await cart.save();
+    // Remove the product from every cart that contains it BEFORE deleting it,
+    // so a failure here leaves the product in place and the request can be retried
+    const carts = await Cart.find({ 'cartItems.productId': id });
+    for (const cart of carts) {
+      const removedItems = cart.cartItems.filter((item) =>
+        item.productId.equals(id)
+      );
+      cart.cartItems = cart.cartItems.filter(
+        (item) => !item.productId.equals(id)
+      );
+      for (const item of removedItems) {
+        cart.totalPrice -= item.quantity * item.price;
       }
+
+      // Set to 0 just in case decimals occur from rounding and cart is empty
+      if (cart.cartItems.length === 0) {
+        cart.totalPrice = 0;
+      }
+
+      await cart.save();
     }
+
+    const doc = await Product.findByIdAndDelete(id);
 
     console.log('Warning (deleteProduct) got Requested 🗑️');
 
-    res.status(204).json({
-      status: 'success',
-      data: doc,
-      message: 'Resource deleted successfully',
-    });
+    if (!doc) {
+      res.status(404).json({
+        status: 'fail',
+        message: 'No product found with that ID',
+      });
+      return;
+    }
+
+    // 204 responses never carry a body
+    res.status(204).end();
   } catch (err) {
-    res.status(404).json({
+    // Malformed id is a client error, anything else is a server error
+    const isBadId = err instanceof mongoose.Error.CastError;
+    res.status(isBadId ? 400 : 500).json({
       status: 'error',
-      message: err instanceof Error ? err.message : 'Resource not found',
+      message:
+        err instanceof Error
+          ? err.message
+          : 'An error occurred when deleting the product',
     });
   }
 };
