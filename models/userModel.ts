@@ -46,6 +46,8 @@ const userSchema = new mongoose.Schema<IUser>({
     type: String,
     required: [true, 'A user needs a specified email address'],
     trim: true,
+    // Stored and looked up in lowercase, so "Foo@x.com" and "foo@x.com" are the same account
+    lowercase: true,
     validate: [validator.isEmail, 'Please provide a valid email address'],
     // Login looks users up by email, so two accounts must never share one
     unique: true,
