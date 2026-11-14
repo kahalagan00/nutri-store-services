@@ -7,7 +7,7 @@ declare global {
         _id: string;
         name: string;
         email: string;
-        dateOfBirth: Date;
+        dateOfBirth?: Date;
         passwordChangedAt?: Date;
         role: string;
         slug: string;

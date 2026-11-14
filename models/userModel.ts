@@ -13,7 +13,7 @@ interface IUser extends mongoose.Document {
   passwordConfirm: string | undefined;
   role: string;
   image?: string;
-  dateOfBirth: Date;
+  dateOfBirth?: Date;
   height?: {
     heightMetric: number;
     heightImperial: number;
@@ -33,6 +33,7 @@ interface IUser extends mongoose.Document {
   passwordResetToken: string | undefined;
   passwordResetExpires: Date | undefined;
   active: boolean;
+  tokenVersion: number;
 }
 
 const userSchema = new mongoose.Schema<IUser>({
@@ -56,6 +57,12 @@ const userSchema = new mongoose.Schema<IUser>({
     required: [true, 'Please provide a password for the user'],
     // Custom message, the default one echoes the submitted password back
     minLength: [8, 'A password must have at least 8 characters'],
+    // bcrypt only reads the first 72 bytes, the rest would be silently ignored
+    validate: {
+      validator: (value: string) => Buffer.byteLength(value) <= 72,
+      message:
+        'A password must be at most 72 characters (accents and emoji count as several)',
+    },
     select: false,
     unique: true,
   },
@@ -82,14 +89,20 @@ const userSchema = new mongoose.Schema<IUser>({
   },
   dateOfBirth: {
     type: Date,
-    default: Date.now, // Passed as a function so it runs per user, not once at startup
     // Important because some products are recommended to be taken by people in a certain age range
-    required: [true, 'The user must specify their date of birth'],
+    // No default: a missing date stays missing instead of becoming "born today"
+    validate: {
+      validator: (value: Date) => value <= new Date(),
+      message: 'The date of birth cannot be in the future',
+    },
   },
   height: {
     type: {
       heightMetric: {
         type: Number,
+        // Metres. Bounds keep out negatives, typos and unconvertible values
+        min: [0.3, 'Height must be at least 0.3 metres'],
+        max: [3, 'Height must be at most 3 metres'],
       },
       heightImperial: {
         type: Number,
@@ -102,6 +115,9 @@ const userSchema = new mongoose.Schema<IUser>({
     type: {
       weightMetric: {
         type: Number,
+        // Kilograms
+        min: [1, 'Weight must be at least 1 kg'],
+        max: [700, 'Weight must be at most 700 kg'],
       },
       weightImperial: {
         type: Number,
@@ -127,7 +143,20 @@ const userSchema = new mongoose.Schema<IUser>({
     default: true,
     select: false,
   },
+  // Carried inside every JWT. Bumping it (password change, logout) invalidates
+  // all tokens issued so far for this user
+  tokenVersion: { type: Number, default: 0 },
   slug: String,
+});
+
+// Internal fields never leave the API, whichever endpoint serializes the user
+userSchema.set('toJSON', {
+  versionKey: false,
+  transform: (doc, ret: any) => {
+    delete ret.active;
+    delete ret.tokenVersion;
+    return ret;
+  },
 });
 
 // DOCUMENT MIDDLEWARE
@@ -159,6 +188,8 @@ userSchema.pre('save', function (next) {
   }
 
   this.passwordChangedAt = new Date(Date.now() - 1000);
+  // Exact, unlike the timestamp above (a JWT only has one-second resolution)
+  this.tokenVersion += 1;
   console.log(
     'passwordChangedAt',
     Math.floor(this.passwordChangedAt.getTime() / 1000)
@@ -166,11 +197,29 @@ userSchema.pre('save', function (next) {
   next();
 });
 
+// Passwords used to pass through xss-clean, which rewrote "<" to "&lt;" before
+// hashing. Accounts from that time still hold such a hash, so a password
+// containing "<" that does not match as typed is also tried in that form
+export const verifyPassword = async (
+  candidatePassword: string,
+  userPassword: string
+) => {
+  if (await bcrypt.compare(candidatePassword, userPassword)) return true;
+
+  return (
+    candidatePassword.includes('<') &&
+    (await bcrypt.compare(
+      candidatePassword.replace(/</g, '&lt;'),
+      userPassword
+    ))
+  );
+};
+
 userSchema.methods.checkPassword = async function (
   candidatePassword: string,
   userPassword: string
 ) {
-  return await bcrypt.compare(candidatePassword, userPassword);
+  return await verifyPassword(candidatePassword, userPassword);
 };
 
 // Checks if the password was changed recently by comparing it to the "issued at" of the JWT

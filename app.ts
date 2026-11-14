@@ -114,7 +114,20 @@ app.use(cookieParser());
 app.use(ExpressMongoSanitize());
 
 // Data sanitization against XSS
-app.use(xss());
+// It rewrites "<" to "&lt;" in every body string. Passwords are only ever hashed,
+// never rendered, so they are put back exactly as typed
+const xssClean = xss();
+const PASSWORD_FIELDS = ['password', 'passwordConfirm', 'passwordCurrent'];
+app.use(((req: Request, res: Response, next: NextFunction): void => {
+  const typed = PASSWORD_FIELDS.map((field) => req.body?.[field]);
+
+  xssClean(req, res, () => {
+    PASSWORD_FIELDS.forEach((field, i) => {
+      if (typeof typed[i] === 'string') req.body[field] = typed[i];
+    });
+    next();
+  });
+}) as express.RequestHandler);
 
 // Prevent HTTP parameter pollution (duplicate query params, last one wins)
 app.use(hpp());
