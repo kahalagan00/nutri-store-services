@@ -129,14 +129,14 @@ const signup: RequestHandler = async (req, res, next) => {
       throw err;
     }
   } catch (err) {
-    // Duplicate key (unique email or name), hide the raw MongoDB error message
+    // Duplicate key (unique email), hide the raw MongoDB error message
     if (
       err instanceof mongoose.mongo.MongoServerError &&
       err.code === 11000
     ) {
       res.status(409).json({
         status: 'error',
-        message: 'An account with that email or name already exists',
+        message: 'An account with that email already exists',
       });
       return;
     }

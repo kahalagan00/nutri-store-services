@@ -39,7 +39,6 @@ const userSchema = new mongoose.Schema<IUser>({
   name: {
     type: String,
     required: [true, 'A user must have a full name specified'],
-    unique: true,
     trim: true,
   },
   email: {
