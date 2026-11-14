@@ -219,7 +219,11 @@ const protect: RequestHandler = async (req, res, next) => {
       req.headers.authorization.startsWith('Bearer')
     ) {
       token = req.headers.authorization.split(' ')[1];
-    } else if (req.cookies.jwt) {
+    }
+
+    // Fall back to the cookie when the header carries no token: an empty "Bearer",
+    // or the literal "undefined"/"null" a frontend sends when it has no token to insert
+    if (!token || token === 'undefined' || token === 'null') {
       token = req.cookies.jwt;
     }
 
