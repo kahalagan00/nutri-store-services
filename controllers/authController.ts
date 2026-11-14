@@ -18,6 +18,10 @@ const LBS_IN_KG = 2.2;
 const DUMMY_PASSWORD_HASH =
   '$2a$12$3tNuQI8RN7ZkrPEXQW1oUOTWzcAcSdTS1R6MTjY/S6n1UtnP4Gtoe';
 
+// forgotPassword never answers a well-formed request faster than this, so a
+// registered email (token save + email send) cannot be told apart by response time
+const FORGOT_PASSWORD_MIN_RESPONSE_MS = 2000;
+
 const signToken = (id: string) => {
   return jwt.sign(
     {
@@ -324,36 +328,36 @@ const forgotPassword: RequestHandler = async (req, res, next) => {
       throw new AppError('Please provide an email address', 400);
     }
 
+    // Started before the lookup so both outcomes are padded to the same total time
+    const minResponseTime = new Promise((resolve) =>
+      setTimeout(resolve, FORGOT_PASSWORD_MIN_RESPONSE_MS)
+    );
+
     // 1) Get user based on the email provided in the POST request body
     const user = await User.findOne({ email: req.body.email });
-    if (!user) {
-      res.status(200).json(sentResponse);
-      return;
+
+    if (user) {
+      try {
+        // 2) Generate the random reset token
+        const resetToken = user.createPasswordResetToken();
+        await user.save({ validateBeforeSave: false });
+
+        // 3) Send it to user's email
+        // The email only shows the token (last path segment). Do not build this
+        // from the request's Host header, which the sender of the request controls
+        const resetURL = `/api/v1/users/resetPassword/${resetToken}`;
+
+        await new Email(user, resetURL).sendPasswordReset();
+      } catch (err) {
+        // Only logged: an error response here would reveal the email is registered
+        console.error(err);
+        user.passwordResetToken = undefined;
+        user.passwordResetExpires = undefined;
+        await user.save({ validateBeforeSave: false }).catch(console.error);
+      }
     }
 
-    // 2) Generate the random reset token
-    const resetToken = user.createPasswordResetToken();
-    await user.save({ validateBeforeSave: false });
-
-    try {
-      // 3) Send it to user's email
-      // The email only shows the token (last path segment). Do not build this
-      // from the request's Host header, which the sender of the request controls
-      const resetURL = `/api/v1/users/resetPassword/${resetToken}`;
-
-      await new Email(user, resetURL).sendPasswordReset();
-    } catch (err) {
-      console.error(err);
-      user.passwordResetToken = undefined;
-      user.passwordResetExpires = undefined;
-      await user.save({ validateBeforeSave: false });
-
-      throw new AppError(
-        'There was an error sending the email. Try again later!',
-        500
-      );
-    }
-
+    await minResponseTime;
     res.status(200).json(sentResponse);
   } catch (err) {
     sendError(res, err, 'An error occurred when requesting a password reset');
