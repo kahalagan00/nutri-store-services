@@ -1,8 +1,7 @@
 const crypto = require('crypto');
 import jwt from 'jsonwebtoken';
-import bcrypt from 'bcryptjs';
 import mongoose from 'mongoose';
-import User from '../models/userModel';
+import User, { verifyPassword } from '../models/userModel';
 import { NextFunction, Request, RequestHandler, Response } from 'express';
 import Email from '../utils/email';
 import { AppError, sendError } from '../utils/appError';
@@ -18,10 +17,16 @@ const LBS_IN_KG = 2.2;
 const DUMMY_PASSWORD_HASH =
   '$2a$12$3tNuQI8RN7ZkrPEXQW1oUOTWzcAcSdTS1R6MTjY/S6n1UtnP4Gtoe';
 
-const signToken = (id: string) => {
+// forgotPassword never answers a well-formed request faster than this, so a
+// registered email (token save + email send) cannot be told apart by response time
+const FORGOT_PASSWORD_MIN_RESPONSE_MS = 2000;
+
+const signToken = (id: string, tokenVersion: number) => {
   return jwt.sign(
     {
       id,
+      // Checked in "protect", see tokenVersion in userModel
+      v: tokenVersion,
     },
     process.env.JWT_SECRET as string,
     {
@@ -38,7 +43,7 @@ const createSendToken = (
   req: Request,
   res: Response
 ) => {
-  const token = signToken(user._id);
+  const token = signToken(user._id, user.tokenVersion);
 
   // 15 minutes common security measure
   const cookieExpirationOffset: number =
@@ -65,9 +70,10 @@ const createSendToken = (
   // Remove password from output
   user.password = undefined;
 
+  // The token travels only in the httpOnly cookie above. Putting it in the body
+  // as well would hand it to any script that can read the response
   res.status(statusCode).json({
     status: 'success',
-    token,
     data: {
       user,
     },
@@ -125,14 +131,14 @@ const signup: RequestHandler = async (req, res, next) => {
       throw err;
     }
   } catch (err) {
-    // Duplicate key (unique email or name), hide the raw MongoDB error message
+    // Duplicate key (unique email), hide the raw MongoDB error message
     if (
       err instanceof mongoose.mongo.MongoServerError &&
       err.code === 11000
     ) {
       res.status(409).json({
         status: 'error',
-        message: 'An account with that email or name already exists',
+        message: 'An account with that email already exists',
       });
       return;
     }
@@ -159,15 +165,17 @@ const login: RequestHandler = async (req, res) => {
     }
 
     // 2) Check if user exists && password is correct
-    const user = await User.findOne({ email }).select('+password');
+    const user = await User.findOne({ email }).select('+password +active');
 
     // "await" here is very important to make sure the checking returns the correct value
     // A comparison always runs, even for an unknown email (see DUMMY_PASSWORD_HASH)
-    const isPasswordCorrect = user
-      ? await user.checkPassword(password, user.password)
-      : await bcrypt.compare(password, DUMMY_PASSWORD_HASH);
+    const isPasswordCorrect = await verifyPassword(
+      password,
+      user ? user.password : DUMMY_PASSWORD_HASH
+    );
 
-    if (!user || !isPasswordCorrect) {
+    // A deactivated account gets the same answer as a wrong password
+    if (!user || !isPasswordCorrect || user.active === false) {
       throw new AppError('Incorrect email or password detected', 401);
     }
 
@@ -181,8 +189,48 @@ const login: RequestHandler = async (req, res) => {
   return;
 };
 
+// Reads the JWT from the "Authorization: Bearer" header or, failing that, the cookie
+const getToken = (req: Request): string | undefined => {
+  let token;
+  if (
+    req.headers.authorization &&
+    req.headers.authorization.startsWith('Bearer')
+  ) {
+    token = req.headers.authorization.split(' ')[1];
+  }
+
+  // Fall back to the cookie when the header carries no token: an empty "Bearer",
+  // or the literal "undefined"/"null" a frontend sends when it has no token to insert
+  if (!token || token === 'undefined' || token === 'null') {
+    token = req.cookies.jwt;
+  }
+
+  return token;
+};
+
 // Logout the user
-const logout: RequestHandler = (req, res) => {
+const logout: RequestHandler = async (req, res) => {
+  // Revoke server-side: clearing the cookie alone leaves a copied token usable
+  // until it expires. Bumping the version ends the user's sessions on all devices
+  try {
+    const token = getToken(req);
+    if (token) {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET as string, {
+        algorithms: ['HS256'],
+      }) as jwt.JwtPayload;
+
+      const user = await User.findById(decoded.id);
+      // Only a token that is still valid itself may revoke
+      if (user && user.tokenVersion === (decoded.v ?? 0)) {
+        user.tokenVersion += 1;
+        await user.save({ validateBeforeSave: false });
+      }
+    }
+  } catch (err) {
+    // An invalid or expired token has nothing to revoke, the cookie is cleared either way
+    if (!(err instanceof jwt.JsonWebTokenError)) console.error(err);
+  }
+
   // res.cookie('jwt', 'loggedout', {
   //   expires: new Date(Date.now() + 10 * 1000),
   //   httpOnly: true,
@@ -209,15 +257,7 @@ const protect: RequestHandler = async (req, res, next) => {
   try {
     // 1) Getting token and check if it's there
     // console.log('Cookies: ', req.cookies);
-    let token;
-    if (
-      req.headers.authorization &&
-      req.headers.authorization.startsWith('Bearer')
-    ) {
-      token = req.headers.authorization.split(' ')[1];
-    } else if (req.cookies.jwt) {
-      token = req.cookies.jwt;
-    }
+    const token = getToken(req);
 
     if (!token) {
       throw new AppError(
@@ -231,10 +271,19 @@ const protect: RequestHandler = async (req, res, next) => {
       algorithms: ['HS256'],
     }) as jwt.JwtPayload;
 
-    // 3) Check if user still exists
-    const currentUser = await User.findById(decoded.id);
-    if (!currentUser) {
+    // 3) Check if user still exists (a deactivated account counts as gone)
+    const currentUser = await User.findById(decoded.id).select('+active');
+    if (!currentUser || currentUser.active === false) {
       throw new AppError('The user holding this token no longer exists', 401);
+    }
+
+    // Tokens issued before the last logout or password change carry an older version
+    // (tokens from before versions existed have none and count as version 0)
+    if (currentUser.tokenVersion !== (decoded.v ?? 0)) {
+      throw new AppError(
+        'Your session is no longer valid! Please log in again.',
+        401
+      );
     }
 
     //4) Check if user changed password after the JWT token was issued
@@ -324,36 +373,36 @@ const forgotPassword: RequestHandler = async (req, res, next) => {
       throw new AppError('Please provide an email address', 400);
     }
 
+    // Started before the lookup so both outcomes are padded to the same total time
+    const minResponseTime = new Promise((resolve) =>
+      setTimeout(resolve, FORGOT_PASSWORD_MIN_RESPONSE_MS)
+    );
+
     // 1) Get user based on the email provided in the POST request body
     const user = await User.findOne({ email: req.body.email });
-    if (!user) {
-      res.status(200).json(sentResponse);
-      return;
+
+    if (user) {
+      try {
+        // 2) Generate the random reset token
+        const resetToken = user.createPasswordResetToken();
+        await user.save({ validateBeforeSave: false });
+
+        // 3) Send it to user's email
+        // The email only shows the token (last path segment). Do not build this
+        // from the request's Host header, which the sender of the request controls
+        const resetURL = `/api/v1/users/resetPassword/${resetToken}`;
+
+        await new Email(user, resetURL).sendPasswordReset();
+      } catch (err) {
+        // Only logged: an error response here would reveal the email is registered
+        console.error(err);
+        user.passwordResetToken = undefined;
+        user.passwordResetExpires = undefined;
+        await user.save({ validateBeforeSave: false }).catch(console.error);
+      }
     }
 
-    // 2) Generate the random reset token
-    const resetToken = user.createPasswordResetToken();
-    await user.save({ validateBeforeSave: false });
-
-    try {
-      // 3) Send it to user's email
-      // The email only shows the token (last path segment). Do not build this
-      // from the request's Host header, which the sender of the request controls
-      const resetURL = `/api/v1/users/resetPassword/${resetToken}`;
-
-      await new Email(user, resetURL).sendPasswordReset();
-    } catch (err) {
-      console.error(err);
-      user.passwordResetToken = undefined;
-      user.passwordResetExpires = undefined;
-      await user.save({ validateBeforeSave: false });
-
-      throw new AppError(
-        'There was an error sending the email. Try again later!',
-        500
-      );
-    }
-
+    await minResponseTime;
     res.status(200).json(sentResponse);
   } catch (err) {
     sendError(res, err, 'An error occurred when requesting a password reset');
@@ -372,11 +421,20 @@ const resetPassword: RequestHandler = async (req, res, next) => {
     const user = await User.findOne({
       passwordResetToken: hashedToken,
       passwordResetExpires: { $gt: Date.now() },
-    });
+    }).select('+password');
 
     // 2) If token has not expired, and there is user, set the new password
     if (!user) {
       throw new AppError('Token is invalid or has expired', 400);
+    }
+    if (
+      typeof req.body.password === 'string' &&
+      (await user.checkPassword(req.body.password, user.password))
+    ) {
+      throw new AppError(
+        'The new password must be different from the current one',
+        400
+      );
     }
     user.password = req.body.password;
     user.passwordConfirm = req.body.passwordConfirm;
@@ -417,7 +475,14 @@ const updateMyPassword: RequestHandler = async (req, res) => {
 
     // 2) Check if POSTed req.body password is correct
     if (!(await user?.checkPassword(req.body.passwordCurrent, user.password))) {
-      throw new AppError('Provided current password is wrong', 401);
+      // 400, not 401: the session is fine, and clients commonly log the user out on 401
+      throw new AppError('Provided current password is wrong', 400);
+    }
+    if (req.body.password === req.body.passwordCurrent) {
+      throw new AppError(
+        'The new password must be different from the current one',
+        400
+      );
     }
 
     // 3) If password is correct --> update password

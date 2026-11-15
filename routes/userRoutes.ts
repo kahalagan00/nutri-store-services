@@ -40,8 +40,19 @@ const forgotPasswordLimiter = rateLimit({
   },
 });
 
+// Slows down probing for registered emails through the "already exists" answer
+// (and bulk account creation): 10 signup attempts per hour per IP
+const signupLimiter = rateLimit({
+  max: 10,
+  windowMs: 60 * 60 * 1000,
+  message: {
+    status: 'error',
+    message: 'Too many signup attempts, please try again in an hour!',
+  },
+});
+
 router.post('/login', loginLimiter, login);
-router.post('/signup', signup);
+router.post('/signup', signupLimiter, signup);
 router.get('/logout', logout);
 
 router.post('/forgotPassword', forgotPasswordLimiter, forgotPassword);

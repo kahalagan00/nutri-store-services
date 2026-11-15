@@ -21,6 +21,16 @@ if (!database) {
   throw new Error('DATABASE environment variable does not exist');
 }
 
+// Without these every login and signup fails, so refuse to start instead
+['JWT_SECRET', 'JWT_EXPIRES_IN', 'JWT_COOKIE_EXPIRES_IN'].forEach((name) => {
+  if (!process.env[name]) {
+    throw new Error(`${name} environment variable does not exist`);
+  }
+});
+if (Number.isNaN(parseInt(process.env.JWT_COOKIE_EXPIRES_IN as string, 10))) {
+  throw new Error('JWT_COOKIE_EXPIRES_IN must be a number of minutes');
+}
+
 mongoose
   .connect(database)
   .then(() => console.log('Database connected successfully 👍'))
